@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -13,10 +12,24 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+
             $table->string('name');
+            $table->string('phone', 20);
+            $table->string('company_name');
+            $table->string('designation');
+            $table->string('city');
+            $table->string('state');
+            $table->string('area_of_interest');
+            $table->string('linkedin_url');
+            $table->text('remarks');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->enum('status', [
+                'pending',
+                'approved',
+                'rejected'
+            ])->default('pending');
             $table->rememberToken();
             $table->timestamps();
         });
