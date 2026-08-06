@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use App\Http\Requests\LoginRequest;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\Request;
 
 class AuthController extends Controller
 {
@@ -83,10 +84,11 @@ class AuthController extends Controller
                 'approval_status' => 'pending',
             ]);
 
-            // 6. Verify Email
-            $user->sendEmailVerificationNotification();
 
             DB::commit();
+
+            // 6. Verify Email
+            $user->sendEmailVerificationNotification();
 
             return response()->json([
                 'success' => true,
@@ -157,21 +159,21 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(): JsonResponse
+    public function logout(Request $request): JsonResponse
     {
-        auth()->user()->currentAccessToken()->delete();
+        $request->user()->currentAccessToken()->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Logout successful.'
-        ], 200);
+            'message' => 'Logout successful.',
+        ]);
     }
 
-    public function me(): JsonResponse
+    public function me(Request $request): JsonResponse
     {
         return response()->json([
             'success' => true,
-            'data' => auth()->user(),
+            'data' => $request->user(),
         ]);
     }
 }

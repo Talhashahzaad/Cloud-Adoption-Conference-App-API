@@ -14,20 +14,24 @@ return new class extends Migration {
             $table->id();
             $table->string('title');
             $table->string('slug')->unique();
-            $table->text('description')->nullable();
-            $table->string('logo')->nullable();
-            $table->string('cover_image')->nullable();
-            $table->date('start_date');
-            $table->date('end_date');
-            $table->date('registration_start_date');
-            $table->date('registration_end_date');
-            $table->string('venue');
-            $table->string('google_map_url')->nullable();
+            $table->date('conference_date');
+            $table->string('venue_name');
+            $table->text('venue_address');
+            $table->string('venue_city');
+            $table->string('venue_state');
+            $table->date('active_start_date');
+            $table->date('active_end_date');
+            $table->string('google_map_url');
             $table->enum('status', [
                 'active',
                 'inactive'
             ])->default('active');
+            $table->foreignId('created_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
