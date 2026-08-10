@@ -25,7 +25,7 @@ class ConferenceResource extends JsonResource
             'active_end_date' => $this->active_end_date?->format('Y-m-d'),
             'google_map_url' => $this->google_map_url,
             'status' => $this->status,
-            'created_by' => $this->created_by,
+            'created_by' => $this->whenNotNull($this->created_by),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

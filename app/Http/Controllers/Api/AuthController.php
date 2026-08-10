@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Requests\LoginRequest;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
+use App\Models\Ticket;
 
 class AuthController extends Controller
 {
@@ -31,7 +32,9 @@ class AuthController extends Controller
         }
 
         // 2. Conference Check
-        $conference = Conference::find($request->conference_id);
+        $conference = Conference::where('id', $request->conference_id)
+            ->where('status', 'active')
+            ->first();
 
         if (!$conference) {
             return response()->json([
@@ -40,7 +43,38 @@ class AuthController extends Controller
             ], 404);
         }
 
-        // 3. Registration Window Check
+        // 3.  Ticket Reference Check
+
+        $ticket = Ticket::where('conference_id', $conference->id)
+            ->where('ticket_reference', $request->ticket_reference)
+            ->first();
+
+        if (!$ticket) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid ticket reference.'
+            ], 422);
+        }
+
+        if ($ticket->status !== 'unused') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This ticket has already been used.'
+            ], 422);
+        }
+
+        if (
+            strtolower(trim($ticket->ticket_holder_email))
+            !==
+            strtolower(trim($request->email))
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email does not match the uploaded ticket.'
+            ], 422);
+        }
+
+        // 4. Registration Window Check
         $today = now()->toDateString();
 
         if (
@@ -57,7 +91,7 @@ class AuthController extends Controller
 
             DB::beginTransaction();
 
-            // 4. Create User
+            // 5. Create User
             $user = User::create([
                 'role_id' => $userRole->id,
                 'name' => $request->name,
@@ -74,7 +108,18 @@ class AuthController extends Controller
                 'status' => 'pending',
             ]);
 
-            // 5. Create Registration
+            $alreadyRegistered = Registration::where('conference_id', $conference->id)
+                ->where('ticket_reference', $request->ticket_reference)
+                ->exists();
+
+            if ($alreadyRegistered) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ticket reference has already been used.'
+                ], 422);
+            }
+
+            // 6. Create Registration
             Registration::create([
                 'user_id' => $user->id,
                 'conference_id' => $conference->id,
@@ -84,10 +129,15 @@ class AuthController extends Controller
                 'approval_status' => 'pending',
             ]);
 
+            $ticket->update([
+                'status' => 'used',
+                'used_by_user_id' => $user->id,
+                'used_at' => now(),
+            ]);
 
             DB::commit();
 
-            // 6. Verify Email
+            // 7. Verify Email
             $user->sendEmailVerificationNotification();
 
             return response()->json([

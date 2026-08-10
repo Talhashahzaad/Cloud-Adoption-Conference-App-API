@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+
 class Conference extends Model
 {
     use SoftDeletes;
@@ -49,4 +50,15 @@ class Conference extends Model
     {
         return $query->where('status', 'active');
     }
+    public function agendas()
+    {
+        return $this->hasMany(Agenda::class);
+    }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+
 }

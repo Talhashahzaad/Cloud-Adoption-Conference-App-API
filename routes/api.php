@@ -1,66 +1,133 @@
 <?php
 
-use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
+
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ConferenceController;
-use Illuminate\Http\JsonResponse;
+use App\Http\Controllers\Api\Admin\ConferenceController as AdminConferenceController;
 use App\Http\Controllers\Api\EmailVerificationController;
+use App\Http\Controllers\Api\Admin\AgendaController as AdminAgendaController;
+use App\Http\Controllers\Api\Admin\RegistrationController as AdminRegistrationController;
+use App\Http\Controllers\Api\Admin\TicketController as AdminTicketController;
+
+/*
+|--------------------------------------------------------------------------
+| Public Authentication Routes
+|--------------------------------------------------------------------------
+*/
 
 Route::post('/register', [AuthController::class, 'register']);
-Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-    ->middleware('signed')
-    ->name('verification.verify');
 Route::post('/login', [AuthController::class, 'login']);
-Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request): JsonResponse {
 
-    $request->fulfill();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Email verified successfully. Your account is now waiting for admin approval.'
-    ]);
-
-})->middleware(['signed'])->name('verification.verify');
+Route::get(
+    '/email/verify/{id}/{hash}',
+    [EmailVerificationController::class, 'verify']
+)->middleware('signed')->name('verification.verify');
 
 
-Route::post('/email/verification-notification', function (Request $request) {
-
-    $request->user()->sendEmailVerificationNotification();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Verification email sent.'
-    ]);
-
-})->middleware(['auth:sanctum', 'throttle:6,1']);
-
-/**Protected Routes */
-Route::middleware('auth:sanctum')->group(function () {
-
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me', [AuthController::class, 'me']);
-
-});
-
-Route::prefix('admin')
-    ->middleware('auth:sanctum')
-    ->group(function () {
-
-        Route::apiResource('conferences', ConferenceController::class);
-
-        Route::patch(
-            'conferences/{conference}/status',
-            [ConferenceController::class, 'updateStatus']
-        );
-
-    });
+/*
+|--------------------------------------------------------------------------
+| Public Conference Routes
+|--------------------------------------------------------------------------
+*/
 
 Route::get('/conferences', [ConferenceController::class, 'index']);
 Route::get('/conferences/{conference}', [ConferenceController::class, 'show']);
+
+
+/*
+|--------------------------------------------------------------------------
+| Authenticated User Routes
+|--------------------------------------------------------------------------
+*/
+
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/conferences', [ConferenceController::class, 'store']);
-    Route::put('/conferences/{conference}', [ConferenceController::class, 'update']);
-    Route::delete('/conferences/{conference}', [ConferenceController::class, 'destroy']);
+
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get('/me', [AuthController::class, 'me']);
+
+    Route::post('/email/verification-notification', function (Request $request) {
+
+        $request->user()->sendEmailVerificationNotification();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Verification email sent.'
+        ]);
+
+    })->middleware('throttle:6,1');
+
 });
+
+
+/*
+|--------------------------------------------------------------------------
+| Admin Routes
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('admin')
+    ->name('admin.')
+    ->middleware('auth:sanctum')
+    ->group(function () {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Conference Management
+        |--------------------------------------------------------------------------
+        */
+
+        Route::apiResource('conferences', AdminConferenceController::class);
+
+        Route::patch(
+            'conferences/{conference}/status',
+            [AdminConferenceController::class, 'updateStatus']
+        )->name('conferences.status');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Agendas Management
+        |--------------------------------------------------------------------------
+        */
+
+        Route::apiResource(
+            'conferences.agendas',
+            AdminAgendaController::class
+        );
+
+        Route::apiResource(
+            'registrations',
+            AdminRegistrationController::class
+        )->only([
+                    'index',
+                    'show'
+                ]);
+
+        Route::patch(
+            'registrations/{registration}/approval',
+            [AdminRegistrationController::class, 'updateApprovalStatus']
+        )->name('registrations.approval');
+
+        Route::prefix('tickets')
+            ->name('tickets.')
+            ->group(function () {
+
+                Route::get(
+                    '/',
+                    [AdminTicketController::class, 'index']
+                )->name('index');
+
+                Route::post(
+                    '/import',
+                    [AdminTicketController::class, 'import']
+                )->name('import');
+
+                Route::get(
+                    '/template',
+                    [AdminTicketController::class, 'downloadTemplate']
+                )->name('template');
+
+            });
+    });

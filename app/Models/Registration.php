@@ -33,4 +33,10 @@ class Registration extends Model
     {
         return $this->belongsTo(Conference::class);
     }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
 }

@@ -24,6 +24,7 @@ class UpdateConferenceRequest extends FormRequest
             'conference_date' => [
                 'required',
                 'date',
+                'after_or_equal:active_start_date',
             ],
 
             'venue_name' => [
