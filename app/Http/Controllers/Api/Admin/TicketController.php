@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\TicketTemplateExport;
+use App\Models\Conference;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class TicketController extends Controller
 {
@@ -54,6 +55,10 @@ class TicketController extends Controller
     public function import(
         ImportTicketRequest $request
     ): JsonResponse {
+        $conference = Conference::findOrFail(
+            $request->conference_id
+        );
+
 
         Excel::import(
 
@@ -82,4 +87,6 @@ class TicketController extends Controller
 
         );
     }
+
+
 }

@@ -13,10 +13,6 @@ class UpdateAgendaRequest extends StoreAgendaRequest
     {
         return [
 
-            'conference_id' => [
-                'required',
-                'exists:conferences,id',
-            ],
 
             'session_name' => [
                 'required',

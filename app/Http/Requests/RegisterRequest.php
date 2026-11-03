@@ -3,7 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-
+use Illuminate\Validation\Rules\Password;
 class RegisterRequest extends FormRequest
 {
     public function authorize(): bool
@@ -15,21 +15,10 @@ class RegisterRequest extends FormRequest
     {
         return [
 
-            'conference_id' => [
-                'required',
-                'exists:conferences,id'
-            ],
-
             'ticket_reference' => [
                 'required',
                 'string',
-                'max:255'
-            ],
-
-            'ticket_source' => [
-                'nullable',
-                'string',
-                'max:100'
+                'max:100',
             ],
 
             'name' => [
@@ -41,7 +30,7 @@ class RegisterRequest extends FormRequest
             'phone' => [
                 'required',
                 'string',
-                'max:20'
+                'digits_between:10,15'
             ],
 
             'company_name' => [
@@ -93,7 +82,11 @@ class RegisterRequest extends FormRequest
             'password' => [
                 'required',
                 'confirmed',
-                'min:8'
+                Password::min(8)
+                    ->letters()
+                    ->mixedCase()
+                    ->numbers()
+                    ->symbols(),
             ],
 
         ];

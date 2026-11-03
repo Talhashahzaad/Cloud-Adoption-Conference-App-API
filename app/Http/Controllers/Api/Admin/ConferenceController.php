@@ -188,7 +188,6 @@ class ConferenceController extends Controller
         UpdateConferenceStatusRequest $request,
         Conference $conference
     ): JsonResponse {
-
         $conference->update([
             'status' => $request->status,
         ]);
@@ -199,4 +198,5 @@ class ConferenceController extends Controller
             'data' => new ConferenceResource($conference->fresh()),
         ]);
     }
+
 }

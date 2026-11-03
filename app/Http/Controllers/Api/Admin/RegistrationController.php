@@ -22,7 +22,6 @@ class RegistrationController extends Controller
             'conference',
             'approver',
         ]);
-
         if ($request->filled('status')) {
             $query->where('approval_status', $request->status);
         }
@@ -67,7 +66,6 @@ class RegistrationController extends Controller
         ApproveRegistrationRequest $request,
         Registration $registration
     ): JsonResponse {
-
         DB::transaction(function () use ($request, $registration) {
 
             $registration->update([
@@ -95,4 +93,5 @@ class RegistrationController extends Controller
             'data' => new RegistrationResource($registration),
         ]);
     }
+
 }

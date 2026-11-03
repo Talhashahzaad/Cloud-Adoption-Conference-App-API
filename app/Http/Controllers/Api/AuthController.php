@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterRequest;
-use App\Models\Conference;
+use App\Http\Requests\ChangePasswordRequest;
 use App\Models\Registration;
 use App\Models\Role;
 use App\Models\User;
@@ -14,6 +14,11 @@ use App\Http\Requests\LoginRequest;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use App\Models\Ticket;
+use App\Http\Requests\UpdateProfileRequest;
+use App\Http\Resources\UserResource;
+use App\Http\Requests\ForgotPasswordRequest;
+use Illuminate\Support\Facades\Password;
+use App\Http\Requests\ResetPasswordRequest;
 
 class AuthController extends Controller
 {
@@ -31,24 +36,9 @@ class AuthController extends Controller
             ], 500);
         }
 
-        // 2. Conference Check
-        $conference = Conference::where('id', $request->conference_id)
-            ->where('status', 'active')
+        // 2. Find Ticket
+        $ticket = Ticket::where('ticket_reference', $request->ticket_reference)
             ->first();
-
-        if (!$conference) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Conference not found.'
-            ], 404);
-        }
-
-        // 3.  Ticket Reference Check
-
-        $ticket = Ticket::where('conference_id', $conference->id)
-            ->where('ticket_reference', $request->ticket_reference)
-            ->first();
-
         if (!$ticket) {
             return response()->json([
                 'success' => false,
@@ -56,6 +46,30 @@ class AuthController extends Controller
             ], 422);
         }
 
+        // 3. Get Conference From Ticket
+        $conference = $ticket->conference;
+
+        if (!$conference || $conference->status !== 'active') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conference not found or inactive.'
+            ], 404);
+        }
+
+        // 4. Registration Window Check
+        $today = now()->toDateString();
+
+        if (
+            $today < $conference->active_start_date ||
+            $today > $conference->active_end_date
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conference registration is closed.'
+            ], 422);
+        }
+
+        // 5. Ticket Already Used?
         if ($ticket->status !== 'unused') {
             return response()->json([
                 'success' => false,
@@ -63,6 +77,7 @@ class AuthController extends Controller
             ], 422);
         }
 
+        // 6. Email Validation
         if (
             strtolower(trim($ticket->ticket_holder_email))
             !==
@@ -74,24 +89,24 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // 4. Registration Window Check
-        $today = now()->toDateString();
+        // 7. Extra Safety Check
+        $alreadyRegistered = Registration::where(
+            'ticket_reference',
+            $ticket->ticket_reference
+        )->exists();
 
-        if (
-            $today < $conference->registration_start_date ||
-            $today > $conference->registration_end_date
-        ) {
+        if ($alreadyRegistered) {
             return response()->json([
                 'success' => false,
-                'message' => 'Conference registration is closed.'
+                'message' => 'Ticket reference has already been registered.'
             ], 422);
         }
 
+        DB::beginTransaction();
+
         try {
 
-            DB::beginTransaction();
-
-            // 5. Create User
+            // Create User
             $user = User::create([
                 'role_id' => $userRole->id,
                 'name' => $request->name,
@@ -108,27 +123,17 @@ class AuthController extends Controller
                 'status' => 'pending',
             ]);
 
-            $alreadyRegistered = Registration::where('conference_id', $conference->id)
-                ->where('ticket_reference', $request->ticket_reference)
-                ->exists();
-
-            if ($alreadyRegistered) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Ticket reference has already been used.'
-                ], 422);
-            }
-
-            // 6. Create Registration
+            // Create Registration
             Registration::create([
                 'user_id' => $user->id,
-                'conference_id' => $conference->id,
-                'ticket_reference' => $request->ticket_reference,
-                'ticket_source' => $request->ticket_source,
+                'conference_id' => $ticket->conference_id,
+                'ticket_reference' => $ticket->ticket_reference,
+                'ticket_source' => $ticket->ticket_source,
                 'ticket_metadata' => null,
                 'approval_status' => 'pending',
             ]);
 
+            // Mark Ticket Used
             $ticket->update([
                 'status' => 'used',
                 'used_by_user_id' => $user->id,
@@ -137,14 +142,20 @@ class AuthController extends Controller
 
             DB::commit();
 
-            // 7. Verify Email
-            $user->sendEmailVerificationNotification();
+            try {
+                $user->sendEmailVerificationNotification();
+            } catch (\Throwable $e) {
+                \Log::error('Verification email failed', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Registration successful. Please verify your email. After verification your account will be reviewed by the administrator.'
             ], 201);
-
 
         } catch (\Throwable $e) {
 
@@ -179,6 +190,7 @@ class AuthController extends Controller
         if (!$user->hasVerifiedEmail()) {
             return response()->json([
                 'success' => false,
+                'code' => 'email_not_verified',
                 'message' => 'Please verify your email first.'
             ], 403);
         }
@@ -186,14 +198,20 @@ class AuthController extends Controller
         if ($user->status === 'pending') {
             return response()->json([
                 'success' => false,
+                'code' => 'pending_approval',
                 'message' => 'Your account is waiting for admin approval.'
             ], 403);
         }
 
         if ($user->status === 'rejected') {
+            $isStaff = in_array($user->role?->name, ['Admin', 'Super Admin'], true);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Your registration has been rejected.'
+                'code' => $isStaff ? 'account_inactive' : 'registration_rejected',
+                'message' => $isStaff
+                    ? 'Your account has been deactivated. Please contact a super admin.'
+                    : 'Your registration has been rejected.'
             ], 403);
         }
 
@@ -204,7 +222,9 @@ class AuthController extends Controller
             'message' => 'Login successful.',
             'data' => [
                 'token' => $token,
-                'user' => $user,
+                'user' => new UserResource(
+                    $user->load('role', 'registrations.conference')
+                ),
             ]
         ]);
     }
@@ -221,9 +241,125 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user()->load([
+            'role',
+            'registrations.conference',
+        ]);
+
         return response()->json([
             'success' => true,
-            'data' => $request->user(),
+            'data' => new UserResource($user),
+        ]);
+    }
+    public function forgotPassword(
+        ForgotPasswordRequest $request
+    ): JsonResponse {
+
+        $status = Password::sendResetLink(
+            $request->only('email')
+        );
+
+        if ($status !== Password::RESET_LINK_SENT) {
+
+            return response()->json([
+                'success' => false,
+                'message' => __($status),
+            ], 422);
+
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset link sent successfully.',
+        ]);
+    }
+
+    public function resetPassword(
+        ResetPasswordRequest $request
+    ): JsonResponse {
+
+        $status = Password::reset(
+
+            $request->only(
+                'email',
+                'password',
+                'password_confirmation',
+                'token'
+            ),
+
+            function ($user, $password) {
+
+                $user->forceFill([
+
+                    'password' => Hash::make($password),
+
+                ])->save();
+
+            }
+
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+
+            return response()->json([
+                'success' => false,
+                'message' => __($status),
+            ], 422);
+
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset successfully.',
+        ]);
+    }
+    public function updateProfile(
+        UpdateProfileRequest $request
+    ): JsonResponse {
+
+        $user = $request->user();
+
+        $user->update($request->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully.',
+            'data' => new UserResource(
+                $user->fresh()->load(
+                    'role',
+                    'registrations.conference'
+                )
+            ),
+        ]);
+    }
+
+    public function changePassword(
+        ChangePasswordRequest $request
+    ): JsonResponse {
+
+        $user = $request->user();
+
+        if (
+            !Hash::check(
+                $request->current_password,
+                $user->password
+            )
+        ) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Current password is incorrect.'
+            ], 422);
+
+        }
+
+        $user->update([
+            'password' => $request->password,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully.',
         ]);
     }
 }

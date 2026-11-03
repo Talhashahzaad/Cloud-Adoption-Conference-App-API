@@ -33,7 +33,6 @@ class AgendaController extends Controller
         Conference $conference,
         StoreAgendaRequest $request
     ): JsonResponse {
-
         $agenda = $conference->agendas()->create(
             $request->validated()
         );
@@ -53,6 +52,7 @@ class AgendaController extends Controller
         Agenda $agenda
     ): JsonResponse {
 
+
         $this->ensureAgendaBelongsToConference($conference, $agenda);
 
         return response()->json([
@@ -69,7 +69,6 @@ class AgendaController extends Controller
         Agenda $agenda,
         UpdateAgendaRequest $request
     ): JsonResponse {
-
         $this->ensureAgendaBelongsToConference($conference, $agenda);
 
         $agenda->update($request->validated());
@@ -88,7 +87,6 @@ class AgendaController extends Controller
         Conference $conference,
         Agenda $agenda
     ): JsonResponse {
-
         $this->ensureAgendaBelongsToConference($conference, $agenda);
 
         $agenda->delete();
@@ -109,4 +107,5 @@ class AgendaController extends Controller
             'Agenda not found for this conference.'
         );
     }
+
 }

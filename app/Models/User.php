@@ -34,6 +34,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'password',
         'status',
+        'email_verified_at',
     ];
 
     /**
@@ -76,5 +77,19 @@ class User extends Authenticatable implements MustVerifyEmail
     public function importedTickets(): HasMany
     {
         return $this->hasMany(Ticket::class, 'imported_by');
+    }
+    public function conferences(): HasMany
+    {
+        return $this->hasMany(Conference::class, 'created_by');
+    }
+
+    public function bookmarks(): HasMany
+    {
+        return $this->hasMany(Bookmark::class);
+    }
+
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(DeviceToken::class);
     }
 }
